@@ -1,0 +1,43 @@
+import pandas as pd
+from pandas import *
+
+
+# EXCEL IMPORT & EXPORT 
+
+# imports data from excel based on location, drops unneeded columns
+file_path = 'C:/Users/mclafli/Desktop/Web_Scrape/'
+iPortal_import = pd.read_excel(file_path + 'IPortal.xlsx', sheet_name = 'Assets')
+iPortal_import = iPortal_import.drop(columns = ['Type', 'PLC', 'Rack', 'SubAddress', 'Slot', 'SubSlot', 'Module', 'Order number',
+                                           'GSDML files', 'Online-MLFB', 'Online-HW version', 'Online serial No.', 'IP',
+                                           'Subnet', 'Gateway', 'MAC', 'Device ID', 'Robot', 'Rob. Cell name', 'Rob. Controller', 
+                                            'Rob. Serial.', 'Rob. KSS', 'ANZ. Ext. Axes', 'PN-stack active', 'ANZ. secure IOs', 'Number of IOs',
+                                           'Version of PROFINET', 'MasterBusCycleTime', 'MasterBusTimeout', 'SlaveBusCycleTime', 
+                                           'SlaveBusTimeout', 'Profienergy enabled', 'ProfiEnergyTimeToPauseHibernate',
+                                           'ProfiEnergyTimeMinLengthOfStayHibernate', 'ProfiEnergyTimeToOperateHibernate',
+                                           'ProfiEnergyTimeToPauseDrivesOff', 'ProfiEnergyTimeMinLengthOfStayDrivesOff',
+                                           'ProfiEnergyTimeToOperateDrivesOff', 'PN product name', 'Active participants',
+                                            'User-ID','Cycle time', 'SubSystem', 'Version', 'comment', 'Manufacturer'])
+print(iPortal_import)
+
+# filling in empty/NaN cells w/ value preceding the cell 
+iPortal_data = iPortal_import.fillna(method='ffill')
+print(iPortal_data)
+
+# list of the names of all products
+productList = iPortal_data['Product name'].unique()
+pList = pd.DataFrame(productList)
+print(pList)
+
+# number of unique products 
+len(productList)
+
+# data frame that house the count of each device/product 
+productCount = iPortal_data['Product name'].value_counts()
+print(productCount)
+
+# export data to new excel
+writer = pd.ExcelWriter(file_path + 'exportData.xlsx')
+iPortal_data.to_excel(writer, 'IPortal')
+pList.to_excel(writer, 'List of Products')
+productCount.to_excel(writer, 'Count per Product')
+writer.save()
