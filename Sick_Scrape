@@ -1,1 +1,51 @@
+#all imports
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from pandas import *
 
+#request to get html from website
+r = requests.get('https://www.sick.com/de/en/service-and-support/the-sick-product-security-incident-response-team-sick-psirt/w/psirt/#advisories & https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=9')
+soup = BeautifulSoup(r.text)
+
+
+#gets the object that contians information on vulnerabilities
+advisories = soup.find('tbody')
+
+#essentailly breaks up all of the vulnerabilities into their rows and contains them in a list
+items = advisories.find_all('tr')
+
+#initialize dataframe
+d = {'Title': ['1'], 'CVSS Score': ['0'],'Vector': ['0'], 'Products': ['0'], 'PDF': ['0']}
+sick_vuln_df = pd.DataFrame(data=d)
+sick_vuln_df
+
+#for loop to add info from rows to dataframe, iterate through items
+length = len(items)
+index = 1
+for i in range(length-1):
+    
+    #creating variables based on indexed information on the vulnerability
+    work = items[index]
+    tds = work.find_all('td')
+    title = tds[1].get_text()
+    CVSS = tds[2].get_text()
+    Products = tds[3].get_text()
+    
+    #PDF url needs to be converted into a string and made into a substring and then appended to base url
+    PDF = str(tds[5])
+    string = str(PDF)
+    update = string.split('href="', 1)[1]
+    final = update.split('"')[0]
+    url = 'https://www.sick.com' + final
+    
+    #creating data set to create temp dataframe to append to master dataframe of vulnerabilities for SICK
+    d = {'Title': [title], 'CVSS Score': [CVSS], 'Vector': 'NULL', 'Products': [Products], 'PDF': [url]}
+    temp_df = pd.DataFrame(data=d)
+    sick_vuln_df = sick_vuln_df.append(temp_df)
+    index = index + 1
+        
+sick_vuln_df = sick_vuln_df.reset_index()
+sick_vuln_df = sick_vuln_df.drop(columns = ['index'])
+sick_vuln_df = sick_vuln_df.drop([0])
+sick_vuln_df
