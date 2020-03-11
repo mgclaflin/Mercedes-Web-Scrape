@@ -1,1 +1,229 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from pandas import *
 
+#request to get html from website
+r = requests.get('https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=0')
+soup = BeautifulSoup(r.text)
+
+
+
+
+##all functions
+
+#function that gets a pages html and then returns a list of all vendors html on the page
+def vendorsPerPage(url):
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text)
+    
+    #getting a list of all vendors html on the page
+    body = soup.find(role='main')
+    div = body.find(lambda tag: tag.name == 'div' and tag['class'] == ['view-content'])
+    item_list = div.find_all('div')
+    return(item_list)
+
+
+
+#function that pulls all links of a vendor
+def vendorLinks(vendor_html):
+    link_list = vendor_html.find_all('a', href=True)
+    for i in range(len(link_list)):
+        update = str(link_list[i]).split('href="', 1)[1]
+        final = update.split('"')[0]
+        link_list[i] = final
+    return(link_list)
+
+
+
+#function that scrapes data from link list and creates a df for the vendor
+def vulnScrape(link_list, name):
+    print(name)
+    print(link_list)
+    print(len(link_list))
+    baseUrl = 'https://www.us-cert.gov'
+    df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+    df = pd.DataFrame(data=df)
+    if len(link_list) >1:
+        for i in range((len(link_list))):
+            url = baseUrl + link_list[i]
+            vuln_df = vulnInfo(url, name)
+            df = df.append(vuln_df)
+            
+    else:
+        print(link_list)
+        link_list = str(link_list).split("['", 1)[1]
+        link_list = link_list.split("']")[0]
+        url = baseUrl + str(link_list)
+        vuln_df = vulnInfo(url, name)
+        df = df.append(vuln_df)
+
+    df = df[df.Vendor != '0']        
+    return(df)
+
+
+
+#function that goes to vuln page and scrapes inf0
+df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+df = pd.DataFrame(data=df)
+
+def vulnInfo(url, name):
+    print(url)
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text)
+    vendor = name
+    
+    #parsing cvss score from html
+    cvss = str(soup)
+    cvss = cvss.lower()
+    if('a cvss') in cvss:
+        cvss = cvss.split('a cvss', 1)[1]
+        if('score of') in cvss:
+            cvss = cvss.split('score of ', 1)[1]
+            cvss = cvss.split(' ')[0]
+            cvss = cvss[0:3]
+        else:
+            cvss = cvss.split('score: ', 1)[1]
+            cvss = cvss.split(' ')[0]
+            cvss = cvss[0:3]
+    else:
+        cvss = 'NULL'
+    
+    #parsing vector from html
+    vector = str(soup)
+    vector = vector.lower()
+    if('cvss vector') in vector: 
+        vector = vector.split('cvss vector string is', 1)[1]
+        if ((vector.index('(')) == 0) and ((vector.index('a') == 1)):
+            vector = vector.split('.')[0]
+        elif ('(cvss:') in vector:
+            vector = vector.split('/', 1)[1]
+            vector = vector.split('.')[0]
+            vector = '(' + vector
+        elif('>a') in vector:
+            vector = vector.split('/a', 1)[1]
+            vector = vector.split('"')[0]
+            vector = 'a' + vector
+            if(')') in vector:
+                vector = vector.split(')')[0]
+        else:
+            vector = vector.split('>', 1)[1]
+            vector = vector.split('<')[0]
+    else:
+        vector = 'NULL'
+    
+    #parsing products affected from html
+    products = str(soup)
+    products = products.lower()
+    if('affected products') in products:
+        if('affected:') in products:
+            print('1')
+            products = products.split('affected:', 1)[1]
+            products = products.split('</p>', 1)[1]
+            if (products.index('u')) == 0:
+                print('1a')
+                products = products.split('<li>', 1)[1]
+                products = products.split('</li>')[0]
+            elif (products.index('p')) == 0:
+                print('1b')
+                print(products)
+                products = products.split('<li>', 1)[1]
+                products = products.split('</li>')[0]
+            else:
+                products = products.split('<ul>', 1)[1]
+                products = products.split('</ul>')[0]
+        elif('affected products') in products:
+            print('2')
+            products = products.split('affected products', 1)[1]
+            products = products.split('/h3', 1)[1]
+            products = products.split('<h3>')[0]
+        else:
+            print('3')
+            products = products.split('<p>', 1)[1]
+            products = products.split('</p>')[0]
+    else:
+        products = 'NULL'
+   
+    #appending variables to df
+    vuln = {'Vendor': [name], 'CVSS Score': [cvss], 'Vector': [vector], 'Products': [products], 'Link': [url]}
+    vuln_df = pd.DataFrame(data=vuln)
+    
+    #dropping row in df with 0 values
+    vuln_df = vuln_df.reset_index(drop=True)
+    return(vuln_df)
+    
+    
+    
+    
+    ##iterate through all pages of website & call functions
+    
+    #iterating through all pages of the website
+
+#getting down to the code that holds the url for the last page of results
+basePgUrl = 'https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page='
+pg = soup.find_all(role = 'navigation')
+buttons = pg[1].find_all('li')
+string = str(buttons[10])
+update = string.split('href="?page=', 1)[1]
+final = update.split('"')[0]
+numbOfPgs = int(final)
+df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+master_df = pd.DataFrame(data=df)
+
+for i in range(numbOfPgs+1):
+    pgUrl = basePgUrl + str(i) 
+    item_list = vendorsPerPage(pgUrl)
+    length = len(item_list)
+    for x in range(length):
+        print(x)
+        vName = item_list[x].find('h3')
+        name = vName.get_text()
+        name = name.lower() 
+        link_list = vendorLinks(item_list[x])
+        df = vulnScrape(link_list, name)
+        master_df = master_df.append(df)
+        
+master_df
+
+
+
+
+#test all code but only for one page so computer doesn't get overloaded
+basePgUrl = 'https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=10'
+df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+master_df = pd.DataFrame(data=df)
+
+
+item_list = vendorsPerPage(basePgUrl)
+length = len(item_list)
+for x in range(length):
+    print(x)
+    vName = item_list[x].find('h3')
+    name = vName.get_text()
+    name = name.lower() 
+    link_list = vendorLinks(item_list[x])
+    df = vulnScrape(link_list, name)
+    master_df = master_df.append(df)
+    
+print(master_df)
+
+
+
+
+#exporting df to excel to get a better look at the data
+
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'ExportData.xlsx')
+master_df.to_excel(writer, 'Scrape_Data')
+writer.save()
+
+
+
+
+#testing a single link
+
+single_link = ('https://www.us-cert.gov/ics/advisories/ICSA-19-318-02')
+name = 'test'
+df = vulnInfo(single_link, name)
+
+print(df)
