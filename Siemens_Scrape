@@ -1,1 +1,83 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from pandas import *
 
+#request to get html from website
+r = requests.get('https://cert-portal.siemens.com/productcert/rss/advisories.atom')
+soup = BeautifulSoup(r.text)
+
+#creates list of all vulnerabilities
+vulns = soup.find_all('entry')
+
+#initializes df
+data = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+master_df = pd.DataFrame(data=data)
+
+#for loop to iterate through all vulnerabilities and get data
+for i in range(len(vulns)):
+    temp_df = scrape(vulns[i])
+    master_df = master_df.append(temp_df)
+    
+    
+#exporting df to excel to get a better look at the data
+master_df = master_df[master_df.Vendor != '0']
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'Siemensdata.xlsx')
+master_df.to_excel(writer, 'Scrape_Data')
+writer.save()
+
+
+##function to get info from each vuln
+def scrape(vulns):
+    url = str(vulns).split('<id>', 1)[1]
+    url = url.split('</id>')[0]
+    url = url.replace('pdf', 'txt', 2)
+    print(url)
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text)
+    html = str(soup).lower()
+    
+    df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+    df = pd.DataFrame(data=df)
+
+    #setting values
+    
+    #name
+    name = 'siemens'
+    
+    #link 
+    link = url
+    
+    #cvss score
+    if('base score:') in html:
+        cvss = html.split('base score:', 1)[1]
+        cvss = cvss.split('summary')[0]
+        cvss = cvss.strip()
+    else:
+        cvss = 'NULL'
+    
+    #vector
+    if('cvss vector') in html:
+        vector = html.split('cvss vector', 1)[1]
+        vector = vector.split('/', 1)[1]
+        vector = vector.split('cwe')[0]
+        vector = vector.strip()
+    else:
+        vector = 'NULL'
+    
+    #products
+    if('affected products and solution') in html:
+        products = html.split('affected products and solution', 1)[1]
+        products = products.split('==============================', 1)[1]
+        products = products.split('workarounds')[0]
+        products = products.strip()
+    else:
+        products = 'NULL'
+    
+    data = {'Vendor': [name], 'CVSS Score': [cvss], 'Vector': [vector], 'Products': [products], 'Link': [link]}
+    temp_df = pd.DataFrame(data=data)
+    df = df.append(temp_df)
+    df = df[df.Vendor != '0']
+    
+    return(df)
