@@ -1,0 +1,412 @@
+#importing packages & libraries
+import pandas as pd
+from pandas import *
+import requests
+from bs4 import BeautifulSoup
+import time
+
+
+
+#IPORTAL CODE
+
+
+# EXCEL IMPORT & EXPORT 
+
+# imports data from excel based on location, drops unneeded columns
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+iPortal_import = pd.read_excel(file_path + 'iPortal.xlsx', sheet_name = 'Assets')
+iPortal_import = iPortal_import.drop(columns = ['Type', 'PLC', 'Rack', 'SubAddress', 'Slot', 'SubSlot', 'Module', 'Order number',
+                                           'GSDML files', 'Online-MLFB', 'Online-HW version', 'Online serial No.', 'IP',
+                                           'Subnet', 'Gateway', 'MAC', 'Device ID', 'Robot', 'Rob. Cell name', 'Rob. Controller', 
+                                            'Rob. Serial.', 'Rob. KSS', 'ANZ. Ext. Axes', 'PN-stack active', 'ANZ. secure IOs', 'Number of IOs',
+                                           'Version of PROFINET', 'MasterBusCycleTime', 'MasterBusTimeout', 'SlaveBusCycleTime', 
+                                           'SlaveBusTimeout', 'Profienergy enabled', 'ProfiEnergyTimeToPauseHibernate',
+                                           'ProfiEnergyTimeMinLengthOfStayHibernate', 'ProfiEnergyTimeToOperateHibernate',
+                                           'ProfiEnergyTimeToPauseDrivesOff', 'ProfiEnergyTimeMinLengthOfStayDrivesOff',
+                                           'ProfiEnergyTimeToOperateDrivesOff', 'PN product name', 'Active participants',
+                                            'User-ID','Cycle time', 'SubSystem', 'Version', 'comment', 'Manufacturer'])
+print(iPortal_import)
+
+# filling in empty/NaN cells w/ value preceding the cell 
+iPortal_data = iPortal_import.fillna(method='ffill')
+print(iPortal_data)
+
+# list of the names of all products
+productList = iPortal_data['Product name'].unique()
+pList = pd.DataFrame(productList)
+print(pList)
+
+# number of unique products 
+len(productList)
+
+# data frame that house the count of each device/product 
+productCount = iPortal_data['Product name'].value_counts()
+print(productCount)
+
+
+
+
+
+#SIEMENS CODE
+
+
+
+#request to get html from website
+r = requests.get('https://cert-portal.siemens.com/productcert/rss/advisories.atom')
+soup = BeautifulSoup(r.text)
+
+
+vulns = soup.find_all('entry')
+data = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+master_df = pd.DataFrame(data=data)
+
+
+##function to get info from each vuln
+def scrape(vulns):
+    url = str(vulns).split('<id>', 1)[1]
+    url = url.split('</id>')[0]
+    url = url.replace('pdf', 'txt', 2)
+    print(url)
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text)
+    html = str(soup).lower()
+    
+    df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+    df = pd.DataFrame(data=df)
+
+    #setting values
+    
+    #name
+    name = 'siemens'
+    
+    #link 
+    link = url
+    
+    #cvss score
+    if('base score:') in html:
+        cvss = html.split('base score:', 1)[1]
+        cvss = cvss.split('summary')[0]
+        cvss = cvss.strip()
+    else:
+        cvss = 'NULL'
+    
+    #vector
+    if('cvss vector') in html:
+        vector = html.split('cvss vector', 1)[1]
+        vector = vector.split('/', 1)[1]
+        vector = vector.split('cwe')[0]
+        vector = vector.strip()
+    else:
+        vector = 'NULL'
+    
+    #products
+    if('affected products and solution') in html:
+        products = html.split('affected products and solution', 1)[1]
+        products = products.split('==============================', 1)[1]
+        products = products.split('workarounds')[0]
+        products = products.strip()
+    else:
+        products = 'NULL'
+    
+    data = {'Vendor': [name], 'CVSS Score': [cvss], 'Vector': [vector], 'Products': [products], 'Link': [link]}
+    temp_df = pd.DataFrame(data=data)
+    df = df.append(temp_df)
+    df = df[df.Vendor != '0']
+    
+    return(df)
+
+for i in range(len(vulns)):
+    temp_df = scrape(vulns[i])
+    master_df = master_df.append(temp_df)
+    
+siemens_df = master_df  
+
+
+
+
+
+#SICK AG SCRAPE CODE
+
+
+
+#request to get html from website
+r = requests.get('https://www.sick.com/de/en/service-and-support/the-sick-product-security-incident-response-team-sick-psirt/w/psirt/#advisories & https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=9')
+soup = BeautifulSoup(r.text)
+
+
+#gets the object that contians information on vulnerabilities
+advisories = soup.find('tbody')
+
+#essentailly breaks up all of the vulnerabilities into their rows and contains them in a list
+items = advisories.find_all('tr')
+
+#initialize dataframe
+d = {'Vendor': ['0'], 'CVSS Score': ['0'],'Vector': ['0'], 'Products': ['0'], 'PDF': ['0']}
+sick_vuln_df = pd.DataFrame(data=d)
+sick_vuln_df
+
+#for loop to add info from rows to dataframe, iterate through items
+length = len(items)
+index = 1
+for i in range(length-1):
+    
+    #creating variables based on indexed information on the vulnerability
+    work = items[index]
+    tds = work.find_all('td')
+    vendor = 'Sick AG'
+    CVSS = tds[2].get_text()
+    Products = tds[3].get_text()
+    
+    #PDF url needs to be converted into a string and made into a substring and then appended to base url
+    PDF = str(tds[5])
+    string = str(PDF)
+    update = string.split('href="', 1)[1]
+    final = update.split('"')[0]
+    url = 'https://www.sick.com' + final
+    
+    #creating data set to create temp dataframe to append to master dataframe of vulnerabilities for SICK
+    d = {'Vendor': [vendor], 'CVSS Score': [CVSS], 'Vector': 'NULL', 'Products': [Products], 'PDF': [url]}
+    temp_df = pd.DataFrame(data=d)
+    sick_vuln_df = sick_vuln_df.append(temp_df)
+    index = index + 1
+        
+sick_vuln_df = sick_vuln_df.reset_index()
+sick_vuln_df = sick_vuln_df.drop(columns = ['index'])
+sick_vuln_df = sick_vuln_df.drop([0])
+
+
+
+
+
+#US CERT SCRAPE CODE
+
+
+
+#request to get html from website
+r = requests.get('https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=0')
+soup = BeautifulSoup(r.text)
+
+#function that gets a pages html and then returns a list of all vendors html on the page
+def vendorsPerPage(url):
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text)
+    
+    #getting a list of all vendors html on the page
+    body = soup.find(role='main')
+    div = body.find(lambda tag: tag.name == 'div' and tag['class'] == ['view-content'])
+    item_list = div.find_all('div')
+    return(item_list)
+
+
+
+#function that pulls all links of a vendor
+def vendorLinks(vendor_html):
+    link_list = vendor_html.find_all('a', href=True)
+    for i in range(len(link_list)):
+        update = str(link_list[i]).split('href="', 1)[1]
+        final = update.split('"')[0]
+        link_list[i] = final
+    return(link_list)
+
+
+
+#function that scrapes data from link list and creates a df for the vendor
+def vulnScrape(link_list, name):
+    print(name)
+    print(link_list)
+    print(len(link_list))
+    baseUrl = 'https://www.us-cert.gov'
+    df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+    df = pd.DataFrame(data=df)
+    if len(link_list) >1:
+        for i in range((len(link_list))):
+            url = baseUrl + link_list[i]
+            vuln_df = vulnInfo(url, name)
+            df = df.append(vuln_df)
+            
+    else:
+        print(link_list)
+        link_list = str(link_list).split("['", 1)[1]
+        link_list = link_list.split("']")[0]
+        url = baseUrl + str(link_list)
+        vuln_df = vulnInfo(url, name)
+        df = df.append(vuln_df)
+
+    df = df[df.Vendor != '0']        
+    return(df)
+
+
+
+#function that goes to vuln page and scrapes inf0
+df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+df = pd.DataFrame(data=df)
+
+def vulnInfo(url, name):
+    print(url)
+    try:
+        r = requests.get(url)
+        soup = BeautifulSoup(r.text)
+    except:
+        time.sleep(2)
+        r = requests.get(url)
+        soup = BeautifulSoup(r.text)
+        
+    vendor = name
+    
+    #parsing cvss score from html
+    cvss = str(soup)
+    cvss = cvss.lower()
+    if('a cvss') in cvss:
+        cvss = cvss.split('a cvss', 1)[1]
+        if('score of') in cvss:
+            cvss = cvss.split('score of ', 1)[1]
+            cvss = cvss.split(' ')[0]
+            cvss = cvss[0:3]
+        else:
+            cvss = cvss.split('score: ', 1)[1]
+            cvss = cvss.split(' ')[0]
+            cvss = cvss[0:3]
+    else:
+        cvss = 'NULL'
+    
+    #parsing vector from html
+    vector = str(soup)
+    vector = vector.lower()
+    if('cvss vector') in vector:
+        if('cvss vector string is') in vector:
+            vector = vector.split('cvss vector string is', 1)[1]
+            if ((vector.index('(')) == 0) and ((vector.index('a') == 1)):
+                vector = vector.split('.')[0]
+            elif ('(cvss:') in vector:
+                vector = vector.split('/', 1)[1]
+                vector = vector.split('.')[0]
+                vector = '(' + vector
+            elif('>a') in vector:
+                vector = vector.split('/a', 1)[1]
+                vector = vector.split('"')[0]
+                vector = 'a' + vector
+                if(')') in vector:
+                    vector = vector.split(')')[0]
+            else:
+                vector = vector.split('>', 1)[1]
+                vector = vector.split('<')[0]
+        else:
+            vector = vector.split('cvss vector string', 1)[1]
+            vector = vector.split('is', 1)[1]
+            if ((vector.index('(')) == 0) and ((vector.index('a') == 1)):
+                vector = vector.split('.')[0]
+            elif ('(cvss:') in vector:
+                vector = vector.split('/', 1)[1]
+                vector = vector.split('.')[0]
+                vector = '(' + vector
+            elif('>a') in vector:
+                vector = vector.split('/a', 1)[1]
+                vector = vector.split('"')[0]
+                vector = 'a' + vector
+                if(')') in vector:
+                    vector = vector.split(')')[0]
+            else:
+                vector = vector.split('>', 1)[1]
+                vector = vector.split('<')[0]
+    else:
+        vector = 'NULL'
+    
+    #parsing products affected from html
+    products = str(soup)
+    products = products.lower()
+    if('affected products') in products:
+        if('affected:') in products:
+            print('1')
+            products = products.split('affected:', 1)[1]
+            products = products.split('</p>', 1)[1]
+            if (products.index('u')) == 0:
+                print('1a')
+                products = products.split('<li>', 1)[1]
+                products = products.split('</li>')[0]
+            elif (products.index('p')) == 0:
+                print('1b')
+                print(products)
+                if('<li>') in products:
+                    products = products.split('<li>', 1)[1]
+                    products = products.split('</li>')[0]
+                elif('<p>') in products:
+                    products = products.split('<p>', 1)[1]
+                    products = products.split('</p')[0]
+            else:
+                if('<ul>') in products:
+                    products = products.split('<ul>', 1)[1]
+                    products = products.split('</ul>')[0]
+                elif('<p>') in products:
+                    products = products.split('<p>', 1)[1]
+                    products = products.split('</p')[0]
+        elif('affected products') in products:
+            print('2')
+            products = products.split('affected products', 1)[1]
+            products = products.split('/h3', 1)[1]
+            products = products.split('<h3>')[0]
+        else:
+            print('3')
+            products = products.split('<p>', 1)[1]
+            products = products.split('</p>')[0]
+    else:
+        products = 'NULL'
+   
+    #appending variables to df
+    vuln = {'Vendor': [name], 'CVSS Score': [cvss], 'Vector': [vector], 'Products': [products], 'Link': [url]}
+    vuln_df = pd.DataFrame(data=vuln)
+    
+    #dropping row in df with 0 values
+    vuln_df = vuln_df.reset_index(drop=True)
+    return(vuln_df)
+
+
+#iterating through all pages of the website
+
+#getting down to the code that holds the url for the last page of results
+basePgUrl = 'https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page='
+pg = soup.find_all(role = 'navigation')
+buttons = pg[1].find_all('li')
+string = str(buttons[10])
+update = string.split('href="?page=', 1)[1]
+final = update.split('"')[0]
+numbOfPgs = int(final)
+df = {'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'], 'Products': ['0'], 'Link': ['0']}
+master_df = pd.DataFrame(data=df)
+
+for i in range(numbOfPgs+1):
+    pgUrl = basePgUrl + str(i) 
+    item_list = vendorsPerPage(pgUrl)
+    length = len(item_list)
+    for x in range(length):
+        print(x)
+        vName = item_list[x].find('h3')
+        name = vName.get_text()
+        name = name.lower() 
+        link_list = vendorLinks(item_list[x])
+        df = vulnScrape(link_list, name)
+        master_df = master_df.append(df)
+
+us_cert_df = master_df
+
+
+
+
+#EXPORTING EVERYTHING TO EXCEL
+
+
+# export data to new excel
+writer = pd.ExcelWriter(file_path + 'allData.xlsx')
+iPortal_data.to_excel(writer, 'IPortal')
+pList.to_excel(writer, 'List of Products')
+productCount.to_excel(writer, 'Count per Product')
+
+siemens_df = siemens_df[siemens_df.Vendor != '0']
+siemens_df.to_excel(writer, 'siemensScrape')
+
+sick_vuln_df = sick_vuln_df[sick_vuln_df.Vendor != '0']
+sick_vuln_df.to_excel(writer, 'sickAGScrape')
+
+us_cert_df.to_excel(writer, 'US_CertScrape')
+
+master_df.to_excel(writer, 'MasterFile')
+writer.save()
