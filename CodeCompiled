@@ -7,9 +7,6 @@ import time
 
 
 
-#IPORTAL CODE
-
-
 # EXCEL IMPORT & EXPORT 
 
 # imports data from excel based on location, drops unneeded columns
@@ -41,14 +38,11 @@ len(productList)
 
 # data frame that house the count of each device/product 
 productCount = iPortal_data['Product name'].value_counts()
-print(productCount)
 
 
 
 
-
-#SIEMENS CODE
-
+##########################          SIEMENS SCRAPE       ######################
 
 
 #request to get html from website
@@ -119,14 +113,14 @@ for i in range(len(vulns)):
     temp_df = scrape(vulns[i])
     master_df = master_df.append(temp_df)
     
-siemens_df = master_df  
+
+siemens_df = master_df 
 
 
 
 
 
-#SICK AG SCRAPE CODE
-
+#########################           SICK AG SCRAPE          ###########################
 
 
 #request to get html from website
@@ -176,11 +170,7 @@ sick_vuln_df = sick_vuln_df.drop([0])
 
 
 
-
-
-#US CERT SCRAPE CODE
-
-
+##############################               US CERT SCRAPE           #######################
 
 #request to get html from website
 r = requests.get('https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=0')
@@ -385,14 +375,25 @@ for i in range(numbOfPgs+1):
         link_list = vendorLinks(item_list[x])
         df = vulnScrape(link_list, name)
         master_df = master_df.append(df)
+        
+
 
 us_cert_df = master_df
 
 
 
+######################            APPENDING ALL DFS TOGETHER            ################
 
-#EXPORTING EVERYTHING TO EXCEL
 
+#appending all dfs together
+
+master_df = siemens_df
+master_df = master_df.append(sick_vuln_df)
+master_df = master_df.append(us_cert_df)
+
+
+
+###################                 EXPORTING TO EXCEL          #############
 
 # export data to new excel
 writer = pd.ExcelWriter(file_path + 'allData.xlsx')
@@ -410,3 +411,233 @@ us_cert_df.to_excel(writer, 'US_CertScrape')
 
 master_df.to_excel(writer, 'MasterFile')
 writer.save()
+
+
+######################################             CLEANING AND MERGING DFS              ##############################
+
+#############          IMPORTING FROM EXCEL          ##############
+
+
+#importing vulnerability data from excel sheets
+
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+
+#SICK Data
+Sick_Import = pd.read_excel(file_path + 'SickData.xlsx', sheet_name = 'Scrape_Data')
+Sick_Import = Sick_Import.reset_index()
+Sick_Import = Sick_Import.drop(columns = ['index'])
+
+
+#Siemens Data
+Siemens_Import = pd.read_excel(file_path + 'SiemensData.xlsx', sheet_name = 'Scrape_Data')
+Siemens_Import = Siemens_Import.reset_index()
+Siemens_Import = Siemens_Import.drop(columns = ['index'])
+
+
+#US Cert Data
+UsCert_Import = pd.read_excel(file_path + 'UsCertData.xlsx', sheet_name = 'Scrape_Data')
+UsCert_Import = UsCert_Import.reset_index()
+UsCert_Import = UsCert_Import.drop(columns = ['index'])
+
+#getting vulnerabilities for different vendors from US CERT scrape
+
+#gettings Siemens vulnerabilties 
+fSiemens = UsCert_Import[UsCert_Import['Vendor'].str.contains('siemens')]
+fSiemens['Vendor'] = 'siemens'
+fSiemens = fSiemens.reset_index()
+fSiemens = fSiemens.drop(columns = ['index'])
+
+
+#getting Pepperl Fuchs vulnerabilities from US Cert
+fPepperl = UsCert_Import[UsCert_Import['Vendor'].str.contains('pepperl')]
+fPepperl['Vendor'] = 'pepperl fuchs'
+fPepperl = fPepperl.reset_index()
+PepperlVuln = fPepperl.drop(columns = ['index'])
+
+#getting Pepperl Fuchs vulnerabilities from pepperl scrape
+Pepperl_Import = pd.read_excel(file_path + 'PepperlData.xlsx', sheet_name = 'Sheet1')
+Pepperl_Import = Pepperl_Import.reset_index()
+Pepperl_Import = Pepperl_Import.drop(columns = ['index'])
+Pepperl_Import['Vendor'] = 'pepperl fuchs'
+Pepperl_Import = Pepperl_Import.apply(lambda x: x.astype(str).str.lower())
+Pepperl_Import = Pepperl_Import.drop(columns = ['Unnamed: 4', 'Products'])
+Pepperl_Import = Pepperl_Import.rename(columns = {'Links': 'Link'})
+
+#merging two pepperl vulnerability dataframes together
+PepperlVuln = PepperlVuln.rename(columns = {'Products': 'Description'})
+PepperlVuln = PepperlVuln.append(Pepperl_Import)
+PepperlVuln = PepperlVuln.rename(columns = {'Description': 'Products'})
+
+
+#getting sick vulnerabilities
+fSick = UsCert_Import[UsCert_Import['Vendor'].str.contains('sick')]
+fSick = fSick.reset_index()
+fSick = fSick.drop(columns = ['index'])
+
+
+#getting festo vulnerabilities
+fFesto = UsCert_Import[UsCert_Import['Vendor'].str.contains('fest')]
+fFesto = fFesto.reset_index()
+fFesto = fFesto.drop(columns = ['index'])
+
+
+
+
+#finalized vulnerabilities dfs
+
+#sick
+SickDf = pd.DataFrame(data=Sick_Import)
+SickDf = SickDf.rename(columns = {'PDF': 'Link'})
+SickDf = SickDf.append(fSick)
+SickDf['Vendor'] = 'sick ag'
+SickVuln = SickDf
+SickVuln = SickVuln.drop_duplicates()
+SickVuln = SickVuln.reset_index()
+SickVuln = SickVuln.drop(columns = 'index')
+
+#siemens
+SiemensVuln = fSiemens.append(Siemens_Import)
+SiemensVuln = SiemensVuln.drop_duplicates()
+SiemensVuln['Vendor'] = 'siemens ag'
+SiemensVuln = SiemensVuln.reset_index()
+SiemensVuln = SiemensVuln.drop(columns = 'index')
+
+#pepperl fuchs
+fPepperl = PepperlVuln.drop_duplicates()
+PepperlVuln = fPepperl
+
+#festo
+fFesto = fFesto.drop_duplicates()
+FestoVuln = fFesto
+
+
+
+
+#importing iPortal data from excel
+
+#iPortal Data
+iPortal_Import = pd.read_excel(file_path + 'allData.xlsx', sheet_name = 'IPortal')
+iPortal_Import = iPortal_Import.drop(columns = ['Vendor ID'])
+iPortal_Import = iPortal_Import.drop_duplicates()
+
+#cleaning and separating data
+IPortalDf = pd.DataFrame(data=iPortal_Import)
+IPortalDf['Product name'] = IPortalDf['Product name'].str.lower()
+IPortalDf['Online FW version'] = IPortalDf['Online FW version'].str.lower()
+IPortalDf['Vendor'] = IPortalDf['Vendor'].str.lower()
+
+#getting siemens iPortal
+iPortal_Siemens = iPortal_Import[iPortal_Import['Vendor'].str.contains('siemens')]
+iPortal_Siemens = iPortal_Siemens.reset_index()
+iPortal_Siemens = iPortal_Siemens.drop(columns = 'index')
+
+#getting sick iPortal
+iPortal_Sick = iPortal_Import[iPortal_Import['Vendor'].str.contains('sick')]
+iPortal_Sick = iPortal_Sick.reset_index()
+iPortal_Sick = iPortal_Sick.drop(columns = 'index')
+
+#getting festo iPortal
+iPortal_Festo = iPortal_Import[iPortal_Import['Vendor'].str.contains('festo')]
+iPortal_Festo['Vendor'] = 'festo'
+iPortal_Festo = iPortal_Festo.reset_index()
+iPortal_Festo = iPortal_Festo.drop(columns = 'index')
+
+#getting pepperl iPortal
+iPortal_Pepperl = iPortal_Import[iPortal_Import['Vendor'].str.contains('pepperl')]
+iPortal_Pepperl['Vendor'] = 'Pepperl Fuchs'
+iPortal_Pepperl = iPortal_Pepperl.reset_index()
+iPortal_Pepperl = iPortal_Pepperl.drop(columns = 'index')
+
+
+
+###################################            MERGING FUNCTION           ###########################
+
+
+def mergeDfsCheck(iPortal, Vuln):
+
+    Vuln = Vuln.dropna(subset=['Products'])
+    Vuln = Vuln.fillna('NaN')
+    Vuln = Vuln.reset_index()
+    iPortal = iPortal.dropna()
+    iPortal = iPortal.fillna('NaN')
+    iPortal = iPortal.reset_index()
+    i = 0
+    data1 = {'Product name': ['0'], 'Firmware version': ['0'], 'Vendor': ['0'], 'CVSS Score': ['0'], 'Vector': ['0'],
+             'Description': ['0'], 'Link': ['0']}
+    FinalDf = pd.DataFrame(data = data1)
+    for index, row in iPortal.iterrows():
+        substring = iPortal['Product name'].values[i]
+        print(substring)
+        i = i + 1
+        j = 0
+        for index, row in Vuln.iterrows():
+            string = Vuln['Products'].values[j]
+            if substring in string:
+            
+                print('j/the index or is:')
+                print(j)
+                print('the i index is:')
+                print(i)
+            
+                pName = iPortal.at[i, 'Product name']
+                FWV = iPortal.at[i, 'Online FW version']
+                Vendor = iPortal.at[i, 'Vendor']
+                CVSS = Vuln.at[j, 'CVSS Score']
+                Vector = Vuln.at[j, 'Vector']
+                Products = Vuln.at[j, 'Products']
+                Link = Vuln.at[j, 'Link']
+            
+                data2 = {'Vendor': [Vendor], 'Product name': [pName], 'Firmware version': [FWV], 'CVSS Score': [CVSS], 
+                        'Vector': [Vector], 'Description': [Products], 'Link': [Link]}
+                result = pd.DataFrame(data = data2)
+
+                print(result)
+                FinalDf = FinalDf.append(result) 
+                del result
+            
+            else:
+                print('no match')      
+            j = j + 1
+
+    rowCount = FinalDf['Product name'].count()        
+    if rowCount > 1:
+        print('Dataframe has been populated')
+        FinalDf = FinalDf[['Vendor', 'Product name', 'Firmware version', 'CVSS Score', 'Vector', 'Description', 'Link']]
+        FinalDf = FinalDf.reset_index()
+        FinalDf = FinalDf.drop(0)
+        FinalDf = FinalDf.reset_index()
+        FinalDf = FinalDf.drop(columns = ['index', 'level_0'])
+    else:
+        print('Dataframe has not been populated')
+    return(FinalDf)
+
+
+
+################################## RUNNING FUNCTION FOR ALL VENDORS               ###################
+
+#running function on all vendor dataframes
+SiemensF = mergeDfsCheck(iPortal_Siemens, SiemensVuln)
+FestoF = mergeDfsCheck(iPortal_Festo, FestoVuln)
+SickF = mergeDfsCheck(iPortal_Sick, SickVuln)
+PepperlF = mergeDfsCheck(iPortal_Pepperl, PepperlVuln)
+
+
+
+#######################                  EXPORTING FINAL DFS TO EXCEL            #######################
+
+
+
+#exporting all final dataframes of vulnerabilities
+
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'VulnerabilityData.xlsx')
+SiemensF.to_excel(writer, 'Siemens Vulnerabilities')
+FestoF.to_excel(writer, 'Festo Vulnerabilities')
+SickF.to_excel(writer, 'Sick Vulnerabilities')
+PepperlF.to_excel(writer, 'Pepperl Fuchs Vulnerabilities')
+writer.save()
+
+
+
+
+
