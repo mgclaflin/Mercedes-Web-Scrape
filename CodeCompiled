@@ -610,6 +610,9 @@ def mergeDfsCheck(iPortal, Vuln):
 
 #running function on all vendor dataframes
 SiemensF = mergeDfsCheck(iPortal_Siemens, SiemensVuln)
+SiemensF = SiemensF.drop_duplicates(subset =['Vendor', 'Product name', 'CVSS Score', 'Vector', 'Description', 'Link'], keep='first' )
+SiemensF = SiemensF.reset_index()
+SiemesnF = SiemensF.drop(columns = 'index')
 FestoF = mergeDfsCheck(iPortal_Festo, FestoVuln)
 SickF = mergeDfsCheck(iPortal_Sick, SickVuln)
 PepperlF = mergeDfsCheck(iPortal_Pepperl, PepperlVuln)
