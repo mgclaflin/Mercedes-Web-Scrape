@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-
+# iPortal Data
 
 # EXCEL IMPORT & EXPORT 
 
@@ -40,10 +40,7 @@ len(productList)
 productCount = iPortal_data['Product name'].value_counts()
 
 
-
-
-##########################          SIEMENS SCRAPE       ######################
-
+# Siemens Scrape
 
 #request to get html from website
 r = requests.get('https://cert-portal.siemens.com/productcert/rss/advisories.atom')
@@ -116,12 +113,7 @@ for i in range(len(vulns)):
 
 siemens_df = master_df 
 
-
-
-
-
-#########################           SICK AG SCRAPE          ###########################
-
+# Sick AG Scrape
 
 #request to get html from website
 r = requests.get('https://www.sick.com/de/en/service-and-support/the-sick-product-security-incident-response-team-sick-psirt/w/psirt/#advisories & https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=9')
@@ -168,9 +160,7 @@ sick_vuln_df = sick_vuln_df.reset_index()
 sick_vuln_df = sick_vuln_df.drop(columns = ['index'])
 sick_vuln_df = sick_vuln_df.drop([0])
 
-
-
-##############################               US CERT SCRAPE           #######################
+# US-CERT Scrape
 
 #request to get html from website
 r = requests.get('https://www.us-cert.gov/ics/advisories-by-vendor-last-revised-date?page=0')
@@ -381,19 +371,13 @@ for i in range(numbOfPgs+1):
 us_cert_df = master_df
 
 
-
-######################            APPENDING ALL DFS TOGETHER            ################
-
-
 #appending all dfs together
 
 master_df = siemens_df
 master_df = master_df.append(sick_vuln_df)
 master_df = master_df.append(us_cert_df)
 
-
-
-###################                 EXPORTING TO EXCEL          #############
+# Exporting everything to excel
 
 # export data to new excel
 writer = pd.ExcelWriter(file_path + 'allData.xlsx')
@@ -412,11 +396,22 @@ us_cert_df.to_excel(writer, 'US_CertScrape')
 master_df.to_excel(writer, 'MasterFile')
 writer.save()
 
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'SickData.xlsx')
+sick_vuln_df.to_excel(writer, 'Scrape_Data')
+writer.save()
 
-######################################             CLEANING AND MERGING DFS              ##############################
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'Siemensdata.xlsx')
+siemens_df.to_excel(writer, 'Scrape_Data')
+writer.save()
 
-#############          IMPORTING FROM EXCEL          ##############
+file_path = 'C:/Users/matth/Desktop/Coding/WebScrape/'
+writer = pd.ExcelWriter(file_path + 'UsCertData.xlsx')
+us_cert_df.to_excel(writer, 'Scrape_Data')
+writer.save()
 
+# Cleaning and Merging Dfs
 
 #importing vulnerability data from excel sheets
 
@@ -454,19 +449,21 @@ fPepperl['Vendor'] = 'pepperl fuchs'
 fPepperl = fPepperl.reset_index()
 PepperlVuln = fPepperl.drop(columns = ['index'])
 
-#getting Pepperl Fuchs vulnerabilities from pepperl scrape
-Pepperl_Import = pd.read_excel(file_path + 'PepperlData.xlsx', sheet_name = 'Sheet1')
-Pepperl_Import = Pepperl_Import.reset_index()
-Pepperl_Import = Pepperl_Import.drop(columns = ['index'])
-Pepperl_Import['Vendor'] = 'pepperl fuchs'
-Pepperl_Import = Pepperl_Import.apply(lambda x: x.astype(str).str.lower())
-Pepperl_Import = Pepperl_Import.drop(columns = ['Unnamed: 4', 'Products'])
-Pepperl_Import = Pepperl_Import.rename(columns = {'Links': 'Link'})
 
-#merging two pepperl vulnerability dataframes together
-PepperlVuln = PepperlVuln.rename(columns = {'Products': 'Description'})
-PepperlVuln = PepperlVuln.append(Pepperl_Import)
-PepperlVuln = PepperlVuln.rename(columns = {'Description': 'Products'})
+##### can un comment out if Q finishes his part of the code
+# #getting Pepperl Fuchs vulnerabilities from pepperl scrape
+# Pepperl_Import = pd.read_excel(file_path + 'PepperlData.xlsx', sheet_name = 'Sheet1')
+# Pepperl_Import = Pepperl_Import.reset_index()
+# Pepperl_Import = Pepperl_Import.drop(columns = ['index'])
+# Pepperl_Import['Vendor'] = 'pepperl fuchs'
+# Pepperl_Import = Pepperl_Import.apply(lambda x: x.astype(str).str.lower())
+# Pepperl_Import = Pepperl_Import.drop(columns = ['Unnamed: 4', 'Products'])
+# Pepperl_Import = Pepperl_Import.rename(columns = {'Links': 'Link'})
+
+# #merging two pepperl vulnerability dataframes together
+# PepperlVuln = PepperlVuln.rename(columns = {'Products': 'Description'})
+# PepperlVuln = PepperlVuln.append(Pepperl_Import)
+# PepperlVuln = PepperlVuln.rename(columns = {'Description': 'Products'})
 
 
 #getting sick vulnerabilities
@@ -550,8 +547,6 @@ iPortal_Pepperl = iPortal_Pepperl.drop(columns = 'index')
 
 
 
-###################################            MERGING FUNCTION           ###########################
-
 
 def mergeDfsCheck(iPortal, Vuln):
 
@@ -613,17 +608,11 @@ def mergeDfsCheck(iPortal, Vuln):
 
 
 
-################################## RUNNING FUNCTION FOR ALL VENDORS               ###################
-
 #running function on all vendor dataframes
 SiemensF = mergeDfsCheck(iPortal_Siemens, SiemensVuln)
 FestoF = mergeDfsCheck(iPortal_Festo, FestoVuln)
 SickF = mergeDfsCheck(iPortal_Sick, SickVuln)
 PepperlF = mergeDfsCheck(iPortal_Pepperl, PepperlVuln)
-
-
-
-#######################                  EXPORTING FINAL DFS TO EXCEL            #######################
 
 
 
@@ -636,8 +625,3 @@ FestoF.to_excel(writer, 'Festo Vulnerabilities')
 SickF.to_excel(writer, 'Sick Vulnerabilities')
 PepperlF.to_excel(writer, 'Pepperl Fuchs Vulnerabilities')
 writer.save()
-
-
-
-
-
