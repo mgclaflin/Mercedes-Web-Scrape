@@ -547,7 +547,6 @@ iPortal_Pepperl = iPortal_Pepperl.drop(columns = 'index')
 
 
 
-
 def mergeDfsCheck(iPortal, Vuln):
 
     Vuln = Vuln.dropna(subset=['Products'])
@@ -561,20 +560,20 @@ def mergeDfsCheck(iPortal, Vuln):
              'Description': ['0'], 'Link': ['0']}
     FinalDf = pd.DataFrame(data = data1)
     for index, row in iPortal.iterrows():
-        substring = iPortal['Product name'].values[i]
-        print(substring)
-        i = i + 1
         j = 0
+        substring = iPortal.at[i, 'Product name']
         for index, row in Vuln.iterrows():
-            string = Vuln['Products'].values[j]
+            string = Vuln.at[j, 'Products']
             if substring in string:
             
-                print('j/the index or is:')
+                print('the Vuln index is:')
                 print(j)
-                print('the i index is:')
+                print('the iPortal index is:')
                 print(i)
+                print(substring)
             
                 pName = iPortal.at[i, 'Product name']
+                print(pName)
                 FWV = iPortal.at[i, 'Online FW version']
                 Vendor = iPortal.at[i, 'Vendor']
                 CVSS = Vuln.at[j, 'CVSS Score']
@@ -589,10 +588,24 @@ def mergeDfsCheck(iPortal, Vuln):
                 print(result)
                 FinalDf = FinalDf.append(result) 
                 del result
+                j = j + 1
             
             else:
                 print('no match')      
-            j = j + 1
+                j = j + 1
+        i = i + 1
+
+    rowCount = FinalDf['Product name'].count()        
+    if rowCount > 1:
+        print('Dataframe has been populated')
+        FinalDf = FinalDf[['Vendor', 'Product name', 'Firmware version', 'CVSS Score', 'Vector', 'Description', 'Link']]
+        FinalDf = FinalDf.reset_index()
+        FinalDf = FinalDf.drop(0)
+        FinalDf = FinalDf.reset_index()
+        FinalDf = FinalDf.drop(columns = ['index', 'level_0'])
+    else:
+        print('Dataframe has not been populated')
+    
 
     rowCount = FinalDf['Product name'].count()        
     if rowCount > 1:
