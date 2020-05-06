@@ -513,8 +513,8 @@ FestoVuln = fFesto
 #importing iPortal data from excel
 
 #iPortal Data
-iPortal_Import = pd.read_excel(file_path + 'allData.xlsx', sheet_name = 'IPortal')
-iPortal_Import = iPortal_Import.drop(columns = ['Vendor ID'])
+iPortal_data = pd.read_excel(file_path + 'allData.xlsx', sheet_name = 'IPortal')
+iPortal_Import = iPortal_data.drop(columns = ['Vendor ID'])
 iPortal_Import = iPortal_Import.drop_duplicates()
 
 #cleaning and separating data
@@ -626,10 +626,26 @@ SiemensF = mergeDfsCheck(iPortal_Siemens, SiemensVuln)
 SiemensF = SiemensF.drop_duplicates(subset =['Vendor', 'Product name', 'CVSS Score', 'Vector', 'Description', 'Link'], keep='first' )
 SiemensF = SiemensF.reset_index()
 SiemesnF = SiemensF.drop(columns = 'index')
+SiemensF = SiemensF.drop(columns = 'index')
 FestoF = mergeDfsCheck(iPortal_Festo, FestoVuln)
 SickF = mergeDfsCheck(iPortal_Sick, SickVuln)
 PepperlF = mergeDfsCheck(iPortal_Pepperl, PepperlVuln)
 
+# data frame that houses the count of each device/product 
+productCount = iPortal_data['Product name'].value_counts()
+productCount = productCount.reset_index()
+productCount = productCount.rename(columns = {'Product name': 'Count'})
+productCount = productCount.rename(columns = {'index': 'Product Name'})
+productCount['Product Name'] = productCount['Product Name'].str.lower()
+
+i = 0
+for index, row in SiemensF.iterrows():
+    j = 0;
+    for index, row in productCount.iterrows():
+        if SiemensF.at[i, 'Product name'] == productCount.at[j, 'Product Name']:
+            SiemensF.at[i, 'Product Count'] = productCount.at[j, 'Count'] 
+        j = j + 1
+    i = i + 1
 
 
 #exporting all final dataframes of vulnerabilities
